@@ -141,21 +141,26 @@ jobs:
           touch ./.scmversion
           echo "CONFIG_TMPFS_XATTR=y" >> arch/arm64/configs/gki_defconfig
           
-          # --- FINAL OVERRIDE BLOCK ---
-          # Adding to vendor/debugfs.config because it is the LAST config loaded by make
-          echo "CONFIG_MODULES=y" >> vendor/debugfs.config
-          echo "CONFIG_MODULE_UNLOAD=y" >> vendor/debugfs.config
-          echo "CONFIG_KPROBES=y" >> vendor/debugfs.config
-          echo "CONFIG_HAVE_KPROBES=y" >> vendor/debugfs.config
-          echo "CONFIG_KPROBE_EVENTS=y" >> vendor/debugfs.config
-          echo "CONFIG_KALLSYMS=y" >> vendor/debugfs.config
-          echo "CONFIG_KALLSYMS_ALL=y" >> vendor/debugfs.config
-          echo "CONFIG_FTRACE=y" >> vendor/debugfs.config
-          echo "CONFIG_TRACING=y" >> vendor/debugfs.config
-          echo "CONFIG_DYNAMIC_FTRACE=y" >> vendor/debugfs.config
+          # --- FINAL OVERRIDE BLOCK (Fix for No such file error) ---
+          # Creating a custom fragment to forcefully apply KPM & LKM
+          cat <<EOF > arch/arm64/configs/kpm_force.config
+          CONFIG_MODULES=y
+          CONFIG_MODULE_UNLOAD=y
+          CONFIG_MODVERSIONS=y
+          CONFIG_KPROBES=y
+          CONFIG_HAVE_KPROBES=y
+          CONFIG_KPROBE_EVENTS=y
+          CONFIG_KALLSYMS=y
+          CONFIG_KALLSYMS_ALL=y
+          CONFIG_FTRACE=y
+          CONFIG_TRACING=y
+          CONFIG_DYNAMIC_FTRACE=y
+          EOF
+
+          # Apply the configs, adding our custom fragment at the very end so it overrides everything
+          make O=out gki_defconfig vendor/kalama_GKI.config vendor/oplus/kalama_GKI.config vendor/debugfs.config kpm_force.config
           # ----------------------------
 
-          make O=out gki_defconfig vendor/kalama_GKI.config vendor/oplus/kalama_GKI.config vendor/debugfs.config
           make -j2 O=out Image
 
       - name: Make AnyKernel3
@@ -172,4 +177,4 @@ jobs:
           REL_NAME="${SOC}_${{ inputs.kernel_source }}-${{ inputs.kernel_branch }}_${{ inputs.ksu_type }}_$(date -u +"%Y%m%d_%H%M")"
           cd ${GITHUB_WORKSPACE}
           ZIP_FILE=$(ls *.zip)
-          gh release create "$REL_NAME" --title "$REL_NAME" --notes "Force injected KPM and all missing tracing dependencies via debugfs config." "${ZIP_FILE}" Image
+          gh release create "$REL_NAME" --title "$REL_NAME" --notes "KPM Support forcefully enabled via custom config fragment." "${ZIP_FILE}" Image
